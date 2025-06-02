@@ -8,7 +8,7 @@ module vluint7 (
 
    output logic [`MEM_ADDR_WIDTH-1:0]	addr_out,
    output logic rd,
-   output logic [`WORD_WIDTH-1:0]	data
+   output logic [`INSTR_WIDTH-1:0]	data
   );
 
   wire [`MEM_DATA_WIDTH-1:0] 	tmp_data;
@@ -36,7 +36,7 @@ module vluint7 (
    		.beg(loc_beg)
   );
 
-  always @ (posedge beg)begin
+  always @ (posedge beg) begin
       loc_rd <= 0;      // ожидание чтения записи
       loc_beg <= 1;     // начинаем читать память
       data <= 0;        // 
@@ -44,14 +44,12 @@ module vluint7 (
       loc_addr <= addr; // 
       rd <= 0;          // результат не готов
       working <= 1;     // распаковываем
-      $display("<<<<< begin vluint7 %d", addr);
+      //$display("<<<<< begin vluint7 %d", addr);
   end
-
-
   
   always @ (posedge loc_wrd) begin
+    //$display("data vluint7 shift=%d %d %x %d %x", loc_shift, loc_addr, tmp_data, tmp_data[7], tmp_data[6:0]);
     if (working) begin
-      $display("data vluint7 shift=%d %d %x %d %x", loc_shift, loc_addr, tmp_data, tmp_data[7], tmp_data[6:0]);
       data <= data | (tmp_data[6:0] << loc_shift);
       loc_addr ++;
       if (tmp_data[7]) begin

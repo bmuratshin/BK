@@ -5,7 +5,6 @@ module tb;
   reg clk;
   reg reset;
   reg [`MEM_ADDR_WIDTH-1:0] addr;
-
   reg [`WORD_WIDTH-1:0] instr_data;
   reg [`MEM_ADDR_WIDTH-1:0] addr_out;
   reg ready2;
