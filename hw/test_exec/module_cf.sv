@@ -29,11 +29,15 @@ module module_cf (
    // XF
    output logic start_xf,
    output logic [`DECODER_MEM_ADDR_WIDTH-1:0] addr_xf,
-   input wire done_xf
+   input wire done_xf,
+   // TOS
+   input wire [`STACK_MEM_ADDR_WIDTH-1:0] tos_in, // Top Of Stack
+   output wire [`STACK_MEM_ADDR_WIDTH-1:0] tos_out // Top Of Stack
 );
 
   reg [`DECODER_MEM_ADDR_WIDTH-1:0] addr;
   reg [`DECODER_MEM_ADDR_WIDTH-1:0] addr_out;
+  reg [`DECODER_MEM_ADDR_WIDTH-1:0] addr_goto;
   reg    stop_exec;
   wire   stop_dec;
   wire   done_dec;
@@ -47,11 +51,11 @@ module module_cf (
   reg [`INSTR_WIDTH-1:0] 	fifo_dout;
   reg 			fifo_empty;
   reg 			fifo_rd_en;
-  //reg 			fifo_wr_en;
   reg 			dec_do_it;
+  reg    loc_reset;
 
   sync_fifo #(.DWIDTH(`INSTR_WIDTH)) u_sync_fifo 
-	                      (.reset(reset),
+	                      (.reset(loc_reset),
                          .wr_en(fifo_wr),
                          .rd_en(fifo_rd_en),
                          .clk(clk),
@@ -61,7 +65,7 @@ module module_cf (
                          .full(fifo_full)
                         );
 
-  decoder u_decoder ( .reset(reset),
+  decoder u_decoder ( .reset(loc_reset),
                          .clk(clk),
                          .do_it(dec_do_it),
                          .addr(addr),
@@ -83,12 +87,13 @@ module module_cf (
   wire   exec_done;
 
   executer_cf stream_exec(
-   .reset(reset),
+   .reset(loc_reset),
    .clk(clk),
 
    .do_it(exec_it),
    .done(exec_done),
    .stop(stop_exec),
+   .new_addr(addr_goto),
    
    // FIFO
    .fifo_empty(fifo_empty),
@@ -107,10 +112,19 @@ module module_cf (
    // XF   
    .start_xf(start_xf),
    .addr_xf(addr_xf),
-   .done_xf(done_xf)
+   .done_xf(done_xf),
+   
+   .tos_in(tos_in),
+   .tos_out(tos_out)
   );
   
   assign done = exec_done;
+
+  always @ (posedge reset)begin
+    loc_reset <= 1;
+    @(posedge clk);
+    loc_reset <= 0;
+  end
 
   always @ (posedge do_it)begin
     addr <= start_addr;
@@ -126,6 +140,18 @@ module module_cf (
     @(posedge clk);
     if (!stop)
       exec_it <= 1; 
+  end
+
+  always @ (posedge stop_exec)begin
+    addr <= addr_goto;
+    dec_do_it <= 0; 
+    loc_reset <= 1;
+    @(posedge clk);
+    
+    loc_reset <= 0;
+    dec_do_it <= 1;
+    exec_it <= 1;
+    $display("[%0t] branch", $time);
   end
 
 endmodule

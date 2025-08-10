@@ -24,7 +24,11 @@ module module_xf (
    input wire  	[`DECODER_MEM_DATA_WIDTH-1:0] memc_data_in,
    output logic memc_we,
    input wire  	memc_wrd,
-   output logic memc_beg
+   output logic memc_beg,
+
+   // TOS
+   input wire [`STACK_MEM_ADDR_WIDTH-1:0] tos_in, // Top Of Stack
+   output wire [`STACK_MEM_ADDR_WIDTH-1:0] tos_out // Top Of Stack
 );
 
   reg [`DECODER_MEM_ADDR_WIDTH-1:0] addr;
@@ -44,9 +48,10 @@ module module_xf (
   reg 			fifo_rd_en;
   //reg 			fifo_wr_en;
   reg 			dec_do_it;
+  reg    loc_reset = 0;
 
   sync_fifo #(.DWIDTH(`INSTR_WIDTH)) u_sync_fifo 
-	                      (.reset(reset),
+	                      (.reset(loc_reset),
                          .wr_en(fifo_wr),
                          .rd_en(fifo_rd_en),
                          .clk(clk),
@@ -56,7 +61,7 @@ module module_xf (
                          .full(fifo_full)
                         );
 
-  decoder u_decoder ( .reset(reset),
+  decoder u_decoder ( .reset(loc_reset),
                          .clk(clk),
                          .do_it(dec_do_it),
                          .addr(addr),
@@ -78,7 +83,7 @@ module module_xf (
   wire   exec_done;
 
   executer_xf stream_exec(
-   .reset(reset),
+   .reset(loc_reset),
    .clk(clk),
 
    .do_it(exec_it),
@@ -97,15 +102,30 @@ module module_xf (
    .mem_we(mem_we),
    .mem_oe(mem_oe),
    .mem_wrd(mem_wrd),
-   .mem_beg(mem_beg)
+   .mem_beg(mem_beg),
+   
+   .tos_in(tos_in),
+   .tos_out(tos_out)
   );
   
   assign done = exec_done;
 
+  always @ (posedge reset)begin
+    loc_reset <= 1;
+    @(posedge clk);
+    loc_reset <= 0;
+  end
+
   always @ (posedge do_it)begin
     addr <= start_addr;
-    dec_do_it <= 1;
+    dec_do_it <= 0;
+    exec_it <= 0;
+    loc_reset <= 1;
+    @(posedge clk);
+    loc_reset <= 0;
     exec_it <= 1;
+    dec_do_it <= 1;
+    
     $display("[%0t] begin", $time);
   end
 

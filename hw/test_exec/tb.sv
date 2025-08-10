@@ -46,6 +46,9 @@ module tb;
   wire [`DECODER_MEM_ADDR_WIDTH-1:0] cf_addr_for_xf;
   wire cf_done_xf;
   
+  reg  [`STACK_MEM_ADDR_WIDTH-1:0] TOS; // Top Of Stack
+  reg  [`STACK_MEM_ADDR_WIDTH-1:0] TOS_cf; // TOS out
+  reg  [`STACK_MEM_ADDR_WIDTH-1:0] TOS_xf; // TOS out
     
   module_cf mod_cf(
    .reset(reset),
@@ -74,7 +77,11 @@ module tb;
    // XF
    .start_xf(cf_starts_xf),
    .addr_xf(cf_addr_for_xf),
-   .done_xf(cf_done_xf)
+   .done_xf(cf_done_xf),
+   
+   // TOS
+   .tos_in(TOS),
+   .tos_out(TOS_cf)
   );
     
   module_xf mod_xf(
@@ -99,7 +106,10 @@ module tb;
    .memc_data_in(code_data_in_xf),
    .memc_we(code_we_xf),
    .memc_wrd(code_wrd_xf),
-   .memc_beg(code_beg_xf)
+   .memc_beg(code_beg_xf),
+   // TOS
+   .tos_in(TOS),
+   .tos_out(TOS_xf)
   );
     
     
@@ -158,6 +168,7 @@ module tb;
   initial begin
     clk 	<= 0;
     reset 	<= 1;
+    TOS <= 4 * `STACK_STEP;
 
     #20 reset <= 0;
   end
@@ -171,7 +182,18 @@ module tb;
   end
 
   always @ (posedge exec_done_cf)begin
+    TOS <= TOS_cf;
     $display("[%0t] that's it", $time);
+  end
+
+  always @ (posedge cf_done_xf)begin
+    TOS <= TOS_xf;
+    $display("[%0t] that's it II", $time);
+  end
+
+  always @ (posedge cf_starts_xf)begin
+    TOS <= TOS_cf;
+    $display("[%0t] that's it III", $time);
   end
 
 

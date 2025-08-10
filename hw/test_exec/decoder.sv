@@ -90,6 +90,7 @@ module decoder (
   always @ (posedge do_it)begin
     addr_tmp <= addr;
     done <= 0;
+    stop <= 0;
     beg2 <= 1;
     last_instr <= 0;
   end

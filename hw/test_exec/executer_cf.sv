@@ -6,7 +6,9 @@ module executer_cf (
 
    input wire	do_it,
    output logic done,
+   
    output logic stop,
+   output logic [`DECODER_MEM_ADDR_WIDTH-1:0] new_addr,
    
    // FIFO
    input wire	fifo_empty,
@@ -25,7 +27,11 @@ module executer_cf (
    // XF
    output logic start_xf,
    output logic [`DECODER_MEM_ADDR_WIDTH-1:0] addr_xf,
-   input wire done_xf
+   input wire done_xf,
+   
+   // TOS
+   input wire [`STACK_MEM_ADDR_WIDTH-1:0] tos_in, // Top Of Stack
+   output wire [`STACK_MEM_ADDR_WIDTH-1:0] tos_out // Top Of Stack
   );
 
 
@@ -52,6 +58,8 @@ module executer_cf (
   assign mem_oe = loc_oe;
   assign mem_wrd = loc_wrd;
   assign mem_beg = loc_beg;
+  
+  assign tos_out = stack_top;
 
   reg has_smth;
   reg [1:0] nargs;
@@ -59,8 +67,6 @@ module executer_cf (
   reg [`INSTR_WIDTH-1:0] cur_instr;
   reg [`INSTR_WIDTH-1:0] cur_args [4];  
 
-  // word in bytes
-  integer stack_step = `STACK_MEM_DATA_WIDTH / 8; 
    
   always @ (posedge reset) begin
     integer i;
@@ -73,12 +79,12 @@ module executer_cf (
     cur_instr <= 0;
     has_smth <= 1'b0;
     
-    stack_top <= 4 * stack_step;
-    
     start_xf <= 0;
   end;
                       
   always @ (posedge do_it) begin
+    stack_top <= tos_in;
+    
     while (!stop) begin
       // Wait until there is data in fifo
       while (fifo_empty) begin
@@ -124,9 +130,49 @@ module executer_cf (
             end;
             @(posedge clk);
             start_xf <= 0;
+            stack_top <= tos_in;
             
             $display("[%0t] EXECUTED %d", $time, cur_args[0]);
-            
+          end
+          
+          6'b000010: begin // IF2
+            tmp_addr <= stack_top - `STACK_STEP;
+            loc_we <= 0;
+            while (!loc_wrd) begin
+              @(posedge clk);
+            end;
+            @(posedge clk);
+            @(posedge clk);
+
+            stack_top <= stack_top - `STACK_STEP;
+
+            if (tmp_data_reg_in == 0) begin
+              new_addr <= cur_args[0];
+              stop <= 1;
+              done <= 0;
+            end
+              
+
+            $display("[%0t] IF(%d) %d = %d", $time, tmp_addr, tmp_data_reg_in, cur_args[0]);
+          end
+          
+          6'b000011: begin // GOTO
+            tmp_addr <= stack_top - `STACK_STEP;
+            loc_we <= 0;
+            while (!loc_wrd) begin
+              @(posedge clk);
+            end;
+            @(posedge clk);
+            @(posedge clk);
+
+            if (tmp_data_reg_in != 0) begin
+              new_addr <= cur_args[0];
+              stop <= 1;
+              done <= 0;
+            end
+              
+
+            $display("[%0t] IF %d = %d", $time, tmp_data_reg_in, arg_right, tmp_data_reg_in - arg_right);
           end
         endcase
         //$display("[%0t] EXEC opcode=0x%0h nargs=%d arg=%d", $time, cur_instr, cur_arg, cur_arg ? cur_args[0] : 0);
