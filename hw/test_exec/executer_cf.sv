@@ -172,7 +172,7 @@ module executer_cf (
             end
               
 
-            $display("[%0t] IF %d = %d", $time, tmp_data_reg_in, arg_right, tmp_data_reg_in - arg_right);
+            $display("[%0t] GOTO %d", $time, new_addr);
           end
         endcase
         //$display("[%0t] EXEC opcode=0x%0h nargs=%d arg=%d", $time, cur_instr, cur_arg, cur_arg ? cur_args[0] : 0);

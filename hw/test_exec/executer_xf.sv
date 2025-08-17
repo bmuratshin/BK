@@ -48,7 +48,7 @@ module executer_xf (
   assign tmp_data_reg_in = mem_data_in;
   assign mem_we = loc_we;
   assign mem_oe = loc_oe;
-  assign mem_wrd = loc_wrd;
+  assign loc_wrd = mem_wrd;
   assign mem_beg = loc_beg;
   
   assign tos_out = stack_top;
@@ -279,16 +279,30 @@ module executer_xf (
           end
 
           6'b001000: begin // GT
+            // reading right arg -------------------------------
             tmp_addr <= stack_top - `STACK_STEP;
             loc_we <= 0;
+            loc_beg <= 1;
+            stack_top <= stack_top - `STACK_STEP;
+            while (!loc_wrd) begin
+              @(posedge clk);
+            end;
+            @(posedge clk);
+            loc_beg <= 0;
+            @(posedge clk);
+            arg_right <= tmp_data_reg_in;
+            
+            // reading left arg -------------------------------
+            tmp_addr <= stack_top - `STACK_STEP;
+            loc_we <= 0;
+            loc_beg <= 1;
             while (!loc_wrd) begin
               @(posedge clk);
             end;
             @(posedge clk);
             @(posedge clk);
-
-            tmp_data_reg_out <= (tmp_data_reg_in > cur_args[0] ? 1 : 0);
-          
+            arg_left <= tmp_data_reg_in;
+            tmp_data_reg_out <= (tmp_data_reg_in > arg_right ? 1 : 0);
             // saving the result -----------------------------
             loc_we <= 1;
             while (!loc_wrd) begin
@@ -296,9 +310,65 @@ module executer_xf (
             end;
             @(posedge clk);
             loc_we <= 0;
-
-            $display("[%0t] GT %d>%d => %d", $time, tmp_data_reg_in, cur_args[0], tmp_data_reg_out);
+          
+            $display("[%0t] GT %d>%d=%d", $time, tmp_data_reg_in, arg_right, tmp_data_reg_out);
           end
+
+          6'b001001: begin // ASSIGN
+            // reading right arg (value) -------------------------------
+            tmp_addr <= stack_top - `STACK_STEP;
+            loc_we <= 0;
+            loc_beg <= 1;
+            stack_top <= stack_top - `STACK_STEP;
+            while (!loc_wrd) begin
+              @(posedge clk);
+            end;
+            @(posedge clk);
+            loc_beg <= 0;
+            @(posedge clk);
+            arg_right <= tmp_data_reg_in;
+            
+            // reading left arg (addr) -------------------------------
+            tmp_addr <= stack_top - `STACK_STEP;
+            loc_we <= 0;
+            loc_beg <= 1;
+            while (!loc_wrd) begin
+              @(posedge clk);
+            end;
+            @(posedge clk);
+            @(posedge clk);
+            
+            tmp_addr <= tmp_data_reg_in;
+            tmp_data_reg_out <= arg_right;
+
+            @(posedge clk);
+           
+            // saving the result -----------------------------
+
+            $display("[%0t] ASSIGN BEG", $time);
+
+            loc_we <= 1;
+            while (!loc_wrd) begin
+              @(posedge clk);
+            end;
+            @(posedge clk);
+            loc_we <= 0;
+
+            $display("[%0t] ASSIGN MID", $time);
+            // and to the top of stack
+            tmp_addr <= stack_top - `STACK_STEP;
+            @(posedge clk);
+            loc_we <= 1;
+            @(posedge clk);
+            while (!loc_wrd) begin
+              @(posedge clk);
+            end;
+            @(posedge clk);
+            loc_we <= 0;
+
+            $display("[%0t] ASSIGN *(%d)=%d", $time, arg_left, tmp_data_reg_out);
+          end
+
         endcase
         //$display("[%0t] EXEC opcode=0x%0h nargs=%d arg=%d", $time, cur_instr, cur_arg, cur_arg ? cur_args[0] : 0);
       end

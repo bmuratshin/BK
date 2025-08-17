@@ -54,6 +54,9 @@ module decoder (
   always @ (posedge reset) begin
     done <= 0;
     stop <= 0;
+    addr_tmp <= 0;
+    beg2 <= 0;
+    last_instr <= 0;
   end;
                         
   always @ (posedge ready2)begin
