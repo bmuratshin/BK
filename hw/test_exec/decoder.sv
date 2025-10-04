@@ -1,6 +1,7 @@
 `include "common.h"
 
-module decoder ( 	
+module decoder #( name  = "hz")
+( 
    input wire reset,
    input wire	clk,
 
@@ -12,9 +13,9 @@ module decoder (
    output logic stop,
    
    // FIFO
-   input wire	fifo_full,
+   input wire	fifo_wr_done,
    output logic fifo_wr,
-   output logic [`INSTR_WIDTH-1:0] fifo_data,
+   output logic [`FIFO_ITEM_WIDTH-1:0] fifo_data,
    
    // MEM(VLUINT)
    output logic [`DECODER_MEM_ADDR_WIDTH-1:0] mem_addr,
@@ -28,11 +29,10 @@ module decoder (
                     
 //---------------------------------------------------                        
   reg [`DECODER_MEM_ADDR_WIDTH-1:0]	addr_tmp;
-  reg [`INSTR_WIDTH-1:0]    last_instr;
-  reg [`INSTR_WIDTH-1:0]    instr_data;
-  reg ready2;
+  reg [`FIFO_ITEM_WIDTH-1:0]    last_instr;
+  reg [`FIFO_ITEM_WIDTH-1:0]    instr_data;
+  wire ready2;
   reg beg2;
-  
   
   vluint7 v0 ( 	
     	.clk(clk),
@@ -50,43 +50,41 @@ module decoder (
    		.mem_beg(mem_beg)
   );
 //---------------------------------------------------                        
+
+  assign fifo_data[`INSTR_WIDTH-1:0] = instr_data;
+  assign fifo_data[`FIFO_ITEM_WIDTH-1:`INSTR_WIDTH] = addr_out;
          
   always @ (posedge reset) begin
-    done <= 0;
-    stop <= 0;
+    stop <= 1;
     addr_tmp <= 0;
     beg2 <= 0;
     last_instr <= 0;
+    while (!ready2) begin
+        @(posedge clk);
+    end;
+    done <= 1;
   end;
                         
   always @ (posedge ready2)begin
     if (!done && !stop) begin
-      //$display("[%0t] instr %d addr %d", $time, instr_data, addr_out);
-      beg2 <= 0; 
-      addr_tmp <= addr_out;
-    
-      // Wait until there is space in fifo
-      while (fifo_full) begin
-   	  @(posedge clk);
-         $display("[%0t] FIFO is full, wait for reads to happen", $time);
-      end;
+      $display("[%0t] decoder(%s) instr %d addr %d fifo=%x beg2=%d", $time, name, instr_data, addr_out, fifo_data, beg2);
 
-      // Drive new values into FIFO
-      fifo_wr <= 1'b1;
-      fifo_data	<= instr_data;
-    
-      @(posedge clk);
-    
-      if (instr_data > 0 || last_instr > 0) begin
-        beg2 <= 1'b1;
-        fifo_wr <= 1'b0;
+      if (instr_data == 0 && last_instr == 0) begin
+          done <= 1;
+          stop <= 1;
+          $display("[%0t] decoder(%s) stop", $time, name);
       end else begin
-        done <= 1'b1;
-        fifo_wr <= 1'b0;
-        stop <= 1'b1;
+        addr_tmp <= addr_out;
+        fifo_wr <= 1;
+        beg2 <= 1;
+        last_instr <= instr_data;
+
+        // Wait until there is space in fifo
+        while (!fifo_wr_done && !stop) begin
+     	  @(posedge clk);
+        end;
       end;
-      last_instr <= instr_data;
-    end
+    end;
   end
 
 
@@ -94,7 +92,13 @@ module decoder (
     addr_tmp <= addr;
     done <= 0;
     stop <= 0;
-    beg2 <= 1;
     last_instr <= 0;
+    beg2 <= 1;
   end
+
+  always @ (negedge clk)begin
+    fifo_wr <= 0;
+    beg2 <= 0;
+  end
+
 endmodule

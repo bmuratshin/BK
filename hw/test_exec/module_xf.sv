@@ -28,7 +28,10 @@ module module_xf (
 
    // TOS
    input wire [`STACK_MEM_ADDR_WIDTH-1:0] tos_in, // Top Of Stack
-   output wire [`STACK_MEM_ADDR_WIDTH-1:0] tos_out // Top Of Stack
+   output wire [`STACK_MEM_ADDR_WIDTH-1:0] tos_out, // Top Of Stack
+   
+   // FP
+   input wire [`STACK_MEM_ADDR_WIDTH-1:0] fp_in // Frame Pointer
 );
 
   reg [`DECODER_MEM_ADDR_WIDTH-1:0] addr;
@@ -37,28 +40,26 @@ module module_xf (
   wire   stop_dec;
   wire   done_dec;
    // FIFO
-  wire	fifo_full;
-  wire fifo_wr;
-  reg [`INSTR_WIDTH-1:0] fifo_data;
+  wire	fifo_rd_done;
+  wire	fifo_wr_done;
+  reg 	fifo_rd_en;
+  wire fifo_wr_en;
 
+  reg [`FIFO_ITEM_WIDTH-1:0]  fifo_din;
+  reg [`FIFO_ITEM_WIDTH-1:0]  fifo_dout;
 
-  reg [`INSTR_WIDTH-1:0]  fifo_din;
-  reg [`INSTR_WIDTH-1:0] 	fifo_dout;
-  reg 			fifo_empty;
-  reg 			fifo_rd_en;
-  //reg 			fifo_wr_en;
   reg 			dec_do_it;
   reg    loc_reset = 0;
 
-  sync_fifo #(.DWIDTH(`INSTR_WIDTH)) u_sync_fifo 
+  sync_fifo #(.DWIDTH(`FIFO_ITEM_WIDTH)) u_sync_fifo 
 	                      (.reset(loc_reset),
-                         .wr_en(fifo_wr),
+                         .wr_en(fifo_wr_en),
                          .rd_en(fifo_rd_en),
                          .clk(clk),
                          .din(fifo_din),
                          .dout(fifo_dout),
-                         .empty(fifo_empty),
-                         .full(fifo_full)
+                         .rd_done(fifo_rd_done),
+                         .wr_done(fifo_wr_done)
                         );
 
   decoder u_decoder ( .reset(loc_reset),
@@ -68,8 +69,9 @@ module module_xf (
                          .addr_out(addr_out),
                          .stop(stop_dec),
                          .done(done_dec),
-                         .fifo_full(fifo_full),
-                         .fifo_wr(fifo_wr),
+                         
+                         .fifo_wr_done(fifo_wr_done),
+                         .fifo_wr(fifo_wr_en),
                          .fifo_data(fifo_din),
                          
                          .mem_addr(memc_addr),
@@ -91,7 +93,7 @@ module module_xf (
    .stop(stop_exec),
    
    // FIFO
-   .fifo_empty(fifo_empty),
+   .fifo_rd_done(fifo_rd_done),
    .fifo_rd(fifo_rd_en),
    .fifo_data(fifo_dout),
 
@@ -105,37 +107,50 @@ module module_xf (
    .mem_beg(mem_beg),
    
    .tos_in(tos_in),
-   .tos_out(tos_out)
+   .tos_out(tos_out),
+   
+   .fp_in(fp_in)
   );
   
-  assign done = exec_done;
+  always @ (posedge exec_done) begin
+    done <= exec_done;
+  end
 
   always @ (posedge reset)begin
     loc_reset <= 1;
-    @(posedge clk);
-    loc_reset <= 0;
+    stop <= 0;
+    while (!done_dec) begin
+        @(posedge clk);
+    end;
+    while (!exec_done) begin
+        @(posedge clk);
+    end;
+    done <= 1;
   end
 
   always @ (posedge do_it)begin
     addr <= start_addr;
-    dec_do_it <= 0;
-    exec_it <= 0;
-    loc_reset <= 1;
-    @(posedge clk);
-    loc_reset <= 0;
-    exec_it <= 1;
     dec_do_it <= 1;
-    
-    $display("[%0t] begin", $time);
+    exec_it <= 1;
+    $display("[%0t] begin XF branch %x", $time, start_addr);
   end
 
-  always @ (posedge done_dec)begin
+//  always @ (posedge done_dec)begin
+//    addr <= addr_out;   
+//  end
+
+  always @ (posedge stop_exec)begin
     dec_do_it <= 0; 
-    addr <= addr_out;   
-    
-    @(posedge clk);
-    if (!stop)
-      exec_it <= 1; 
+    loc_reset <= 1;
+      
+    $display("[%0t] fin branch", $time);
+  end
+
+  always @ (negedge clk)begin
+    loc_reset <= 0;
+    exec_it <= 0;
+    done <= 0;
+    dec_do_it <= 0; 
   end
 
 endmodule

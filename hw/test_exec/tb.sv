@@ -50,6 +50,9 @@ module tb;
   reg  [`STACK_MEM_ADDR_WIDTH-1:0] TOS_cf; // TOS out
   reg  [`STACK_MEM_ADDR_WIDTH-1:0] TOS_xf; // TOS out
     
+  reg  [`STACK_MEM_ADDR_WIDTH-1:0] FP; // Frame Pointer
+  reg  [`STACK_MEM_ADDR_WIDTH-1:0] FP_cf; // FP out
+    
   module_cf mod_cf(
    .reset(reset),
    .clk(clk),
@@ -81,7 +84,11 @@ module tb;
    
    // TOS
    .tos_in(TOS),
-   .tos_out(TOS_cf)
+   .tos_out(TOS_cf),
+   
+   // FP
+   .fp_in(FP),
+   .fp_out(FP_cf)
   );
     
   module_xf mod_xf(
@@ -109,7 +116,9 @@ module tb;
    .memc_beg(code_beg_xf),
    // TOS
    .tos_in(TOS),
-   .tos_out(TOS_xf)
+   .tos_out(TOS_xf),
+   // FP
+   .fp_in(FP)
   );
     
     
@@ -167,22 +176,27 @@ module tb;
 
   initial begin
     clk 	<= 0;
-    reset 	<= 1;
-    TOS <= 4 * `STACK_STEP;
-
-    #20 reset <= 0;
-  end
-  
-  initial begin
     #20 @(posedge clk);
+    reset <= 1;
+  end
 
+  always @ (posedge reset)begin
     start_addr_cf <= 0;
-    exec_it_cf <= 1;
+
+    //while (!exec_done_cf) begin
+        @(posedge clk);
+    //end;
+
+    TOS <= 4 * `STACK_STEP;
+    FP <= 4 * `STACK_STEP;
+
     $display("[%0t] let's start it", $time);
+    exec_it_cf  <= 1;
   end
 
   always @ (posedge exec_done_cf)begin
     TOS <= TOS_cf;
+    FP <= FP_cf;
     $display("[%0t] that's it", $time);
   end
 
@@ -193,8 +207,14 @@ module tb;
 
   always @ (posedge cf_starts_xf)begin
     TOS <= TOS_cf;
+    FP <= FP_cf;
+    @(posedge clk);
     $display("[%0t] that's it III", $time);
   end
 
+  always @ (negedge clk)begin
+    reset <= 0;
+    exec_it_cf <= 0;
+  end
 
 endmodule

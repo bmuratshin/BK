@@ -2,26 +2,24 @@
 
 module single_port_sync_ram
 #(  init_from_file=1,
-    file_data="rom_image.mem",
-    addr_width=`DECODER_MEM_ADDR_WIDTH,
-    data_width=`DECODER_MEM_DATA_WIDTH,
-    mem_depth=`DECODER_MEM_DATA_DEPTH
-) ( 	input wire	clk,
+    file_data  = "rom_image.mem",
+    addr_width = `DECODER_MEM_ADDR_WIDTH,
+    data_width = `DECODER_MEM_DATA_WIDTH,
+    mem_depth  = `DECODER_MEM_DATA_DEPTH
+) (
+     input wire	clk,
      input wire reset,
      
-   		input wire [addr_width-1:0]	addr,
-   		input wire [data_width-1:0]	data_in,
-   		output reg [data_width-1:0]	data_out,
-   		input wire			  we,
-   		input wire   		oe,
-   		input wire   		beg,
-   		output logic   rd
+     input  wire [addr_width-1:0] addr,
+     input  wire [data_width-1:0] data_in,
+     output reg  [data_width-1:0] data_out,
+     input  wire   we,
+     input  wire  oe,
+     input  wire  beg,
+     output logic rd
   );
 
-  //reg [data_width-1:0] 	tmp_data;
   reg [data_width-1:0] 	mem [mem_depth];
-
-//  assign data_out = tmp_data;
 
   initial begin
     if (init_from_file) begin
@@ -29,28 +27,19 @@ module single_port_sync_ram
       $readmemh(file_data, mem);
     end;
   end
-    
 
   always @ (posedge beg)begin
-      rd <= 0;
-  end
-
-  always @ (posedge clk) begin
-
-    if (reset) begin    
-      rd <= 0;
-    end else 
-    begin
-      $display("mem %d %d %d", we, oe, addr);
       if (we) begin
         mem[addr] <= data_in;
       end else begin
     	   data_out <= mem[addr];
       end
       rd <= 1;
-    end
-  
-  end  // always
+  end
+
+  always @ (negedge clk) begin
+      rd <= 0;
+  end
 
 endmodule
 
@@ -67,20 +56,19 @@ module dual_port_sync_ram
     input wire [addr_width-1:0]	addr_a,
     input wire [data_width-1:0]	data_in_a,
     output reg [data_width-1:0]	data_out_a,
-    input wire			  we_a,
+    input wire  			we_a,
     input wire   		oe_a,
     input wire   		beg_a,
-    output logic   rd_a,
+    output reg                rd_a,
 
     input wire [addr_width-1:0]	addr_b,
     input wire [data_width-1:0]	data_in_b,
     output reg [data_width-1:0]	data_out_b,
-    input wire			  we_b,
+    input wire  			we_b,
     input wire   		oe_b,
     input wire   		beg_b,
-    output logic   rd_b
+    output reg                rd_b
   );
-
   reg [data_width-1:0] 	        mem [mem_depth];
 
   initial begin
@@ -96,31 +84,40 @@ module dual_port_sync_ram
   end
 
   always @ (posedge beg_a)begin
-      rd_a <= 0;
-  end
+      while (rd_a) begin
+        @(posedge clk);
+      end;
 
-  always @ (posedge beg_b)begin
-      rd_b <= 0;
-  end
-
-  always @ (posedge clk) begin
-      $display("mem_a %d %d %d", we_a, oe_a, addr_a);
       if (we_a) begin
           mem[addr_a] <= data_in_a;
       end else begin
           data_out_a <= mem[addr_a];
       end
+      $display("[%0t] MEM A[%d]=%d %d", $time, addr_a, data_in_a, we_a);
+      @(negedge clk);
       rd_a <= 1;
-  end  // always
+  end
 
-  always @ (posedge clk) begin
-      $display("mem_b %d %d %d", we_a, oe_a, addr_a);
+  always @ (posedge beg_b)begin
+      while (rd_b) begin
+        @(posedge clk);
+      end;
+
       if (we_b) begin
           mem[addr_b] <= data_in_b;
       end else begin
           data_out_b <= mem[addr_b];
       end
+      $display("[%0t] MEM B [%d] %d", $time, addr_b, we_b);
+
+      @(negedge clk);
       rd_b <= 1;
-  end  // always
+  end
+
+  always @ (negedge clk) begin
+      rd_a <= 0;
+      rd_b <= 0;
+     //$monitor("[%0t] mem clear", $time);
+  end
 
 endmodule
